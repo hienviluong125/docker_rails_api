@@ -1,0 +1,32 @@
+version: '3'
+services:
+  db:
+    image: postgres
+    volumes:
+      - ./tmp/db:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: password
+  app:
+    build:
+      context: .
+      dockerfile: ./docker/app/Dockerfile.dev
+    environment:
+      DBUSER: postgres
+      DBPASS: password
+      DBHOST: db
+    depends_on:
+      - db
+    command: sh /scripts/command.sh
+    stdin_open: true
+    tty: true
+  nginx:
+    build:
+      context: docker/nginx
+      dockerfile: Dockerfile
+      args:
+        - HOST=localhost
+    depends_on:
+      - app
+    ports:
+      - 4200:80
+      - 443:443
