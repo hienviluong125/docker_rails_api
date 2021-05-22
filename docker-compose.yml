@@ -3,22 +3,82 @@ services:
   db:
     image: postgres
     volumes:
-      - ./tmp/db:/var/lib/postgresql/data
+      - 'postgres:/var/lib/postgresql/data'
     environment:
       POSTGRES_PASSWORD: password
-  app:
+
+  redis:
+    image: 'redis:4.0-alpine'
+    volumes:
+      - 'redis:/data'
+
+  app1:
+    image: docker_rails_api_image
     build:
       context: .
       dockerfile: ./docker/app/Dockerfile.dev
+    volumes:
+      - '.:/app'
     environment:
       DBUSER: postgres
       DBPASS: password
       DBHOST: db
+      REDIS_URL_SIDEKIQ: redis://redis:6379/1
+      APP_ID: 1
+    links:
+      - db
+      - redis
     depends_on:
       - db
+      - redis
     command: sh /scripts/command.sh
     stdin_open: true
     tty: true
+
+  app2:
+    image: docker_rails_api_image
+    depends_on:
+      - app1
+    environment:
+      DBUSER: postgres
+      DBPASS: password
+      DBHOST: db
+      REDIS_URL_SIDEKIQ: redis://redis:6379/1
+      APP_ID: 2
+    command: sh /scripts/command.sh
+    stdin_open: true
+    tty: true
+
+  app3:
+    image: docker_rails_api_image
+    depends_on:
+      - app1
+    environment:
+      DBUSER: postgres
+      DBPASS: password
+      DBHOST: db
+      REDIS_URL_SIDEKIQ: redis://redis:6379/1
+      APP_ID: 3
+    command: sh /scripts/command.sh
+    stdin_open: true
+    tty: true
+
+  sidekiq:
+    depends_on:
+      - app1
+      - app2
+      - app3
+      - db
+      - redis
+    build:
+      context: .
+      dockerfile: ./docker/app/Dockerfile.dev
+    command: bundle exec sidekiq
+    volumes:
+      - '.:/app'
+    environment:
+      REDIS_URL_SIDEKIQ: redis://redis:6379/1
+
   nginx:
     build:
       context: docker/nginx
@@ -26,7 +86,13 @@ services:
       args:
         - HOST=localhost
     depends_on:
-      - app
+      - app1
+      - app2
+      - app3
     ports:
       - 4200:80
       - 443:443
+
+volumes:
+  redis:
+  postgres:
